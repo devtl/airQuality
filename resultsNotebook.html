@@ -122,6 +122,7 @@ $(document).ready(function () {
 </div>
 
 
+<p>NO2 primarily gets in the air from the burning of fuel. <span class="math inline">\(NO_{2}\)</span> forms from emissions from cars, trucks and buses, power plants, and off-road equipment. Nitrogen Dioxide (<span class="math inline">\(NO_{2}\)</span>) is one of a group of gases called nitrogen oxides (<span class="math inline">\(NO_{x}\)</span>). While all of these gases are harmful to human health and the environment, <span class="math inline">\(NO_{2}\)</span> is of greater concern. To learn more about <span class="math inline">\(NO_{2}\)</span> pollution, visit: (<a href="https://www.epa.gov/no2-pollution" class="uri">https://www.epa.gov/no2-pollution</a>)</p>
 <p>The amount of <span class="math inline">\(NO_{2}\)</span> found in various areas have strong correlations to several predictors. We have found that the strongest predictors of <span class="math inline">\(NO_{2}\)</span> pollution comes from a combination of the area’s population and ozone (<span class="math inline">\(O_{3}\)</span>) pollution.</p>
 <pre class="r"><code>lmModel1 &lt;- lm(no2_1_hr_ppb ~ log_pop_2010 + o3_8_hr_ppm)</code></pre>
 <pre><code>## Warning: Dropping 293 rows with missing values</code></pre>
