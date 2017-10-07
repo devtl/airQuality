@@ -1,0 +1,97 @@
+---
+title: "Project Results"
+author: "Devin Luu, DTL527"
+output: html_document
+---
+The amount of $NO_{2}$ found in various areas have strong correlations to several predictors. We have found that the strongest predictors of $NO_{2}$
+pollution comes from a combination of the area's population and ozone ($O_{3}$) pollution.
+
+```{r include=FALSE}
+library(tidyverse)
+library(modelr)
+library(data.world)
+library(scatterplot3d)
+
+options(na.action = na.warn)
+
+project <- "https://data.world/mattstras/f-17-eda-project-1"
+df <- data.world::query(
+  data.world::qry_sql("SELECT * FROM airQualityData"),
+  dataset = project
+)
+attach(df)
+```
+
+```{r}
+
+lmModel1 <- lm(no2_1_hr_ppb ~ log_pop_2010 + o3_8_hr_ppm)
+summary(lmModel1)
+
+lmPlot <- scatterplot3d(log_pop_2010,o3_8_hr_ppm,no2_1_hr_ppb, xlab = "log(population)", ylab = "O3, ppm", zlab = "no2, hourly, ppb", pch = 16, color = "blue", angle = 330)
+lmPlot$plane3d(lmModel1,col = "red")
+```
+
+We can estimate that an increase of $10^{population}$ will contribute to $NO_{2}$ hourly measurements by 12.7 ppb and an increase of ozone by 1 ppm will contribute 628 ppb.
+
+The residuals from this model are evenly dispersed and have no particular slant or shape indicative of underlying effects.
+
+```{r}
+residDF <- df %>% select(log_pop_2010, o3_8_hr_ppm, no2_1_hr_ppb)
+
+residDF <- residDF %>% add_residuals(lmModel1, "resid")
+
+resPlot <- scatterplot3d(x = residDF$log_pop_2010, y = residDF$o3_8_hr_ppm, z = residDF$resid, xlab = "log(population)", ylab = "O3, ppm", zlab = "residuals", pch =16, color = "blue", angle = 200)
+resPlot$plane3d(c(0,0,0), col = "red")
+```
+
+Using the same model to predict daily $NO_{2}$ measurements produced similar results with $R^{2} = 0.682$.
+
+```{r}
+lmModel12 <- lm(no2_am_ppb ~ log_pop_2010 + o3_8_hr_ppm)
+summary(lmModel12)
+
+lmPlot <- scatterplot3d(log_pop_2010,o3_8_hr_ppm,no2_am_ppb, xlab = "log(population)", ylab = "O3, ppm", zlab = "no2, daily, ppb", pch = 16, color = "blue", angle = 330)
+lmPlot$plane3d(lmModel12,col = "red")
+
+residDF <- df %>% select(log_pop_2010, o3_8_hr_ppm, no2_am_ppb)
+
+residDF <- residDF %>% add_residuals(lmModel12, "resid")
+
+resPlot <- scatterplot3d(x = residDF$log_pop_2010, y = residDF$o3_8_hr_ppm, z = residDF$resid, xlab = "log(population)", ylab = "O3, ppm", zlab = "residuals", pch =16, color = "blue", angle = 200)
+resPlot$plane3d(c(0,0,0), col = "red")
+```
+
+While the both models have identical predictor terms, the $R^{2}$ value for the daily model is slightly less than that of the hourly. This might have something to do with the nonlinear relationship between the two types of measurements.
+
+```{r}
+lmModel17 <- lm(no2_am_ppb ~ no2_1_hr_ppb + I(no2_1_hr_ppb^2))
+summary(lmModel17)
+
+grid4 <- df %>% data_grid(no2_1_hr_ppb = seq_range(no2_1_hr_ppb,20)) %>% add_predictions(lmModel17, "no2_am_ppb")
+
+
+ggplot(df, mapping=aes(no2_1_hr_ppb, no2_am_ppb)) + geom_point() +  geom_line(data = grid4, col="red", lwd = 1)
+
+res4 <- df %>% add_residuals(lmModel17,"resids")
+ggplot(res4, mapping = aes(no2_1_hr_ppb, resids)) + geom_point() + geom_hline(yintercept = 0, col = "red")
+
+```
+
+The residual plot for this model shows heteroscedasticity so instead we will look at the log transform of the daily measurements.
+
+```{r}
+transDf <- df %>% mutate(log_no2_am_ppb = log(no2_am_ppb))
+ggplot(transDf, mapping = aes(no2_1_hr_ppb, log_no2_am_ppb)) + geom_point()
+
+lmModel17_2 <- lm(log_no2_am_ppb ~ no2_1_hr_ppb + I(no2_1_hr_ppb^2), data = transDf)
+summary(lmModel17_2)
+
+grid5 <- transDf %>% data_grid(no2_1_hr_ppb = seq_range(no2_1_hr_ppb,20)) %>% add_predictions(lmModel17_2, "log_no2_am_ppb")
+
+ggplot(transDf, mapping = aes(no2_1_hr_ppb, log_no2_am_ppb)) + geom_point() + geom_line(data = grid5, col = "red")
+
+res5 <- transDf %>% add_residuals(lmModel17_2,"resids")
+ggplot(res5, mapping = aes(no2_1_hr_ppb, resids)) + geom_point() + geom_hline(yintercept = 0, col = "red")
+
+
+```

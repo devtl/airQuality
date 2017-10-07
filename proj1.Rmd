@@ -1,0 +1,239 @@
+---
+title: "Air Quality Regression Notebook"
+output: html_notebook
+---
+
+```{r include=FALSE}
+library(tidyverse)
+library(modelr)
+library(data.world)
+
+options(na.action = na.warn)
+
+project <- "https://data.world/mattstras/f-17-eda-project-1"
+df <- data.world::query(
+  data.world::qry_sql("SELECT * FROM airQualityData"),
+  dataset = project
+)
+
+```
+
+## Regression of Population on NO2
+
+```{r}
+ggplot(df, mapping = aes(no2_1_hr_ppb, population_2010)) + geom_point()
+cor.test(df$no2_1_hr_ppb, df$population_2010)
+```
+
+```{r}
+attach(df)
+lmModel1 <- lm(population_2010 ~ no2_1_hr_ppb)
+summary(lmModel1)
+```
+### Unfortunately this is not a viable prediction model, it's $R^{2}$ is only 0.354. We will try adding a quadratic term to the model.
+
+```{r}
+lmModel3 <- lm(population_2010 ~ no2_1_hr_ppb + I(no2_1_hr_ppb^2))
+summary(lmModel3)
+```
+### This model is slightly better but we should try taking the log of the population instead.
+
+
+## Regression of Log(Population) on NO2
+```{r}
+ggplot(df, mapping = aes(no2_1_hr_ppb, log_pop_2010)) + geom_point()
+cor.test(df$no2_1_hr_ppb, log_pop_2010)
+```
+
+```{r}
+lmModel2 <- lm(log_pop_2010 ~ no2_1_hr_ppb)
+summary(lmModel2)
+```
+```{r}
+grid2 <- df %>% data_grid(no2_1_hr_ppb = seq_range(no2_1_hr_ppb, 20)) %>% 
+  add_predictions(lmModel2, "log_pop_2010")
+
+ggplot(df, mapping = aes(no2_1_hr_ppb, log_pop_2010)) + 
+  geom_point() + 
+  geom_line(data = grid2, colour = "red", size = 1)
+```
+
+### This prediction model works much better and accounts for roughly 60% of the variance in the data. Let's try looking at other variables.
+
+## Regression of Log(Population) on O3 pollution and on per capita income.
+
+```{r}
+ggplot(df, mapping = aes(o3_8_hr_ppm, log_pop_2010)) + geom_point()
+cor.test(o3_8_hr_ppm, log_pop_2010)
+```
+
+```{r}
+lmModel4 <- lm(log_pop_2010 ~ o3_8_hr_ppm + I(o3_8_hr_ppm^2 ))
+summary(lmModel4)
+```
+### The $R^2$ statistic is too low on this model to be a viable predictor.
+
+### Let's look at how per capita income affects the population growth:
+
+```{r}
+ggplot(df, mapping = aes(per_capita_personal_income_dollars_2015, log_pop_2010)) + geom_point()
+cor.test(per_capita_personal_income_dollars_2015, log_pop_2010)
+```
+
+```{r}
+lmModel5 <- lm(log_pop_2010 ~ per_capita_personal_income_dollars_2015 + I(per_capita_personal_income_dollars_2015^2))
+summary(lmModel5)
+```
+
+
+### Both factors O3 pollution and per captia income of the area seem to be bad predictors of population size by themselves. 
+
+```{r}
+lmModel6 <- lm(log_pop_2010 ~ o3_8_hr_ppm * per_capita_personal_income_dollars_2015)
+summary(lmModel6)
+```
+### This is a viable prediction model however the p-value for the o3 coefficient is too high. We will drop that term from the model altogether.
+
+```{r}
+lmModel7 <- lm(log_pop_2010 ~ per_capita_personal_income_dollars_2015 + o3_8_hr_ppm:per_capita_personal_income_dollars_2015)
+summary(lmModel7)
+```
+
+### This is a much better model but let's see how it looks when we also take into account NO2 pollution.
+
+## Regression of Population on NO2 pollution, O3 pollution, and per capita income of the state.
+
+```{r}
+lmModel8 <- lm(log_pop_2010 ~ no2_1_hr_ppb + per_capita_personal_income_dollars_2015 + o3_8_hr_ppm:per_capita_personal_income_dollars_2015)
+summary(lmModel8)
+
+```
+
+### This becomes a much stronger predictive model that explains 71% of the variance, however we see that the per capita coefficient has a very high p-value. 
+
+```{r}
+
+lmModel9 <- lm(log_pop_2010 ~ no2_1_hr_ppb +  o3_8_hr_ppm:per_capita_personal_income_dollars_2015)
+summary(lmModel9)
+```
+
+
+### We now have the best predictive model given our dataset for the log of population size in a state. The best predictor variable seems to be NO2 pollution - this alone accounts for about 60% of variance. With the addition of the interactive term, the model now accounts for 70.6% of all variance in the data.
+
+## Regression of NO2 (1 hr measurements) on various factors.
+
+```{r}
+lmModel10 <- lm(no2_1_hr_ppb ~ log_pop_2010)
+summary(lmModel10)
+```
+```{r}
+cor.test(no2_1_hr_ppb,o3_8_hr_ppm)
+cor.test(no2_1_hr_ppb,`x2015_gdp`)
+
+```
+
+```{r}
+lmModel10 <- lm(no2_1_hr_ppb ~ log_pop_2010)
+summary(lmModel10)
+lmModel11 <- lm(no2_1_hr_ppb ~ o3_8_hr_ppm)
+summary(lmModel11)
+lmModel12 <- lm(no2_1_hr_ppb ~ `x2015_gdp`)
+summary(lmModel12)
+```
+
+### We again see that NO3 and log(Population) are significant linear predictors however O3 pollution and 2015 GDP by themselves fail to be significant.
+
+```{r}
+lmModel11_2 <- lm(no2_1_hr_ppb ~ o3_8_hr_ppm + I(o3_8_hr_ppm^2))
+summary(lmModel11_2)
+
+grid3 <- df %>% data_grid(o3_8_hr_ppm = seq_range(o3_8_hr_ppm, 20)) %>% add_predictions(lmModel11_2, "no2_1_hr_ppb")
+
+ggplot(df, mapping = aes(o3_8_hr_ppm, no2_1_hr_ppb)) + geom_point() + geom_line(data = grid3, colour = "red", size = 1)
+```
+
+
+```{r}
+lmModel13 <- lm(no2_1_hr_ppb ~ o3_8_hr_ppm*`x2015_gdp`)
+summary(lmModel13)
+```
+
+### The combination of O3 pollution and 2015 GDP along with an interactive term produces a significantly better model. $R^{2} = 0.604$.
+
+### We now look to combine our two best models together to get the best predictive model for NO2 Pollution in an area
+
+```{r}
+lmModel15 <- lm(no2_1_hr_ppb ~ log_pop_2010 + o3_8_hr_ppm*`x2015_gdp`)
+summary(lmModel15)
+```
+
+### We see that 2015 GDP and its interaction term does not produce a statistically significant p-value so we will drop these terms from our model.
+
+
+```{r}
+library(scatterplot3d)
+
+lmModel16 <- lm(no2_1_hr_ppb ~ log_pop_2010 + o3_8_hr_ppm)
+summary(lmModel16)
+
+lmPlot <- scatterplot3d(log_pop_2010,o3_8_hr_ppm,no2_1_hr_ppb, xlab = "log(population)", ylab = "O3, ppm", zlab = "no2, hourly, ppb", pch = 16, color = "blue", angle = 330)
+lmPlot$plane3d(lmModel16,col = "red")
+
+residDF <- df %>% select(log_pop_2010, o3_8_hr_ppm, no2_1_hr_ppb)
+
+residDF <- residDF %>% add_residuals(lmModel16, "resid")
+
+resPlot <- scatterplot3d(x = residDF$log_pop_2010, y = residDF$o3_8_hr_ppm, z = residDF$resid, xlab = "log(population)", ylab = "O3, ppm", zlab = "residuals", pch =16, color = "blue", angle = 200)
+resPlot$plane3d(c(0,0,0), col = "red")
+```
+
+
+```{r}
+lmModel16_2 <- lm(no2_am_ppb ~ log_pop_2010 + o3_8_hr_ppm)
+summary(lmModel16_2)
+
+lmPlot <- scatterplot3d(log_pop_2010, o3_8_hr_ppm, no2_am_ppb, xlab = "log(population)", ylab = "O3, ppm", zlab = "no2, daily, ppb", pch = 16, color = "blue", angle = 330)
+lmPlot$plane3d(lmModel16_2,col = "red")
+
+residDF <- df %>% select(log_pop_2010, o3_8_hr_ppm, no2_am_ppb)
+
+residDF <- residDF %>% add_residuals(lmModel16_2, "resid")
+
+resPlot <- scatterplot3d(x = residDF$log_pop_2010, y = residDF$o3_8_hr_ppm, z = residDF$resid, xlab = "log(population)", ylab = "O3, ppm", zlab = "residuals", pch =16, color = "blue", angle = 200)
+resPlot$plane3d(c(0,0,0), col = "red")
+```
+
+```{r}
+lmModel17 <- lm(no2_am_ppb ~ no2_1_hr_ppb + I(no2_1_hr_ppb^2))
+summary(lmModel17)
+
+grid4 <- df %>% data_grid(no2_1_hr_ppb = seq_range(no2_1_hr_ppb,20)) %>% add_predictions(lmModel17, "no2_am_ppb")
+
+
+ggplot(df, mapping=aes(no2_1_hr_ppb, no2_am_ppb)) + geom_point() +  geom_line(data = grid4, col="red", lwd = 1)
+
+res4 <- df %>% add_residuals(lmModel17,"resids")
+ggplot(res4, mapping = aes(no2_1_hr_ppb, resids)) + geom_point() + geom_hline(yintercept = 0, col = "red")
+
+
+```
+### Heteroscedasticity is present in the residual plot. Will try a log transform of the response variable
+
+```{r}
+transDf <- df %>% mutate(log_no2_am_ppb = log(no2_am_ppb))
+ggplot(transDf, mapping = aes(no2_1_hr_ppb, log_no2_am_ppb)) + geom_point()
+
+lmModel17_2 <- lm(log_no2_am_ppb ~ no2_1_hr_ppb + I(no2_1_hr_ppb^2), data = transDf)
+summary(lmModel17_2)
+
+grid5 <- transDf %>% data_grid(no2_1_hr_ppb = seq_range(no2_1_hr_ppb,20)) %>% add_predictions(lmModel17_2, "log_no2_am_ppb")
+
+ggplot(transDf, mapping = aes(no2_1_hr_ppb, log_no2_am_ppb)) + geom_point() + geom_line(data = grid5, col = "red")
+
+res5 <- transDf %>% add_residuals(lmModel17_2,"resids")
+ggplot(res5, mapping = aes(no2_1_hr_ppb, resids)) + geom_point() + geom_hline(yintercept = 0, col = "red")
+
+
+```
+
+
